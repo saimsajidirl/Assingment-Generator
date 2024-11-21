@@ -1,127 +1,115 @@
+api='AIzaSyCWuqsvu0pmNSgUgRJIRYCl61TzZDVdWMs'
+
+
 import streamlit as st
+import google.generativeai as genai
+from pptx import Presentation
 from docx import Document
 from io import BytesIO
-import google.generativeai as genai
-import time
-from pptx import Presentation
-from pptx.util import Pt
 
-genai.configure(api_key='AIzaSyAYILkEzVTT4OrMcuvD_lOHfR5cl2UG5zE')
+genai.configure(api_key=api)
 
-def generate_content(prompt):
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(prompt)
+
+def generate_content(prompt, instruction=""):
+    model = genai.GenerativeModel("gemini-1.5-pro-002")
+    if instruction:
+        full_prompt = f"{prompt}\nInstruction: {instruction}"
+    else:
+        full_prompt = prompt
+    response = model.generate_content(full_prompt)
     return response.text
 
-def add_content_to_ppt(ppt, content):
-    slides = content.split('\n\n')  
-    
-    for slide_content in slides:
-        slide_lines = slide_content.split('\n')
-        title = slide_lines[0]
-        body = '\n'.join(slide_lines[1:])
-        
-        slide = ppt.slides.add_slide(ppt.slide_layouts[1]) 
-        
-        title_shape = slide.shapes.title
-        body_shape = slide.shapes.placeholders[1]
 
-        title_shape.text = title
-        
-        text_frame = body_shape.text_frame
-        text_frame.text = body
-        
-        for paragraph in text_frame.paragraphs:
-            for run in paragraph.runs:
-                run.font.size = Pt(18)  
+def create_pptx(content, heading):
+    prs = Presentation()
+    slide_layout = prs.slide_layouts[1]
+    slide = prs.slides.add_slide(slide_layout)
 
-        body_shape.width = Pt(600)  
-        body_shape.height = Pt(400) 
-        body_shape.left = Pt(50)  
-        body_shape.top = Pt(100) 
-    
-    return ppt
+    title = slide.shapes.title
+    title.text = heading
 
-st.set_page_config(page_title="Assignment Generator")
+    textbox = slide.shapes.placeholders[1]
+    textbox.text = content
 
-st.title("Generate Assignment in One Prompt")
+    pptx_file = BytesIO()
+    prs.save(pptx_file)
+    pptx_file.seek(0)
+    return pptx_file
 
-topic = st.text_input("Enter Topic:")
-extra_instruction = st.text_area("Extra Instruction (Optional)")
 
-file_type = st.selectbox("Select file type", ("Word Document (Docx) ", "PowerPoint Presentation (PPT) "))
+def create_ppt(content, heading):
+    return create_pptx(content, heading)
 
-start_time = None
-end_time = None
 
-if st.button("Generate Content"):
-    if topic:
-        start_time = time.time()
+def create_docx(content, heading):
+    doc = Document()
+    doc.add_heading(heading, 0)
+    doc.add_paragraph(content)
 
-        with st.spinner("Please wait, your document is being generated..."):
-            if extra_instruction:
-                prompt = f"{topic}. {extra_instruction}"
-            else:
-                prompt = topic
+    docx_file = BytesIO()
+    doc.save(docx_file)
+    docx_file.seek(0)
+    return docx_file
 
-            if file_type == "PowerPoint":
-                modified_prompt = f"Create a PowerPoint presentation on {prompt}. Break the content into slides. Each slide should have a title and bullet points. Provide at least 5 slides."
-            else:
-                modified_prompt = f"{prompt}"
 
-            content = generate_content(modified_prompt)
+def app():
+    st.title("Assignment Generator using AI")
 
-            if file_type == "Word Document":
-                doc = Document()
-                doc.add_heading(f"{topic}", level=1)
+    if 'content' not in st.session_state:
+        st.session_state.content = None
 
-                paragraphs = content.split('\n')
-                heading_level = 1
-                for para in paragraphs:
-                    if para.startswith("# "):
-                        doc.add_heading(para[2:], level=heading_level)
-                        heading_level += 1
-                    elif para.startswith("* "):
-                        doc.add_paragraph(para[2:], style='List Bullet')
-                    elif para.startswith("1. "):
-                        doc.add_paragraph(para[3:], style='List Number')
-                    else:
-                        doc.add_paragraph(para)
+    if 'prompt' not in st.session_state:
+        st.session_state.prompt = ''
+    if 'instruction' not in st.session_state:
+        st.session_state.instruction = ''
+    if 'export_format' not in st.session_state:
+        st.session_state.export_format = 'PPTX'
+    if 'heading' not in st.session_state:
+        st.session_state.heading = "Generated Content"
 
-                byte_stream = BytesIO()
-                doc.save(byte_stream)
-                byte_stream.seek(0)
+    st.session_state.prompt = st.text_area("Enter the prompt:", value=st.session_state.prompt, height=150)
+    st.session_state.instruction = st.text_area("Enter additional instructions (optional):", value=st.session_state.instruction, height=150)
 
-                end_time = time.time()
-                elapsed_time = end_time - start_time
+    if st.button("Generate"):
+        if st.session_state.prompt:
+            with st.spinner("Generating content..."):
+                st.session_state.content = generate_content(st.session_state.prompt, st.session_state.instruction)
+                st.session_state.heading = st.session_state.prompt[:30] + "..." if len(st.session_state.prompt) > 30 else st.session_state.prompt
+                st.success("Content generated successfully!")
 
-                st.download_button(
-                    label="Download Word Document",
-                    data=byte_stream,
-                    file_name=f"{topic}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
+    if st.session_state.content:
+        st.session_state.export_format = st.radio("Select export format:", ("PPTX", "PPT", "DOCX"), index=["PPTX", "PPT", "DOCX"].index(st.session_state.export_format))
 
-            elif file_type == "PowerPoint":
-                ppt = Presentation()
+        download_filename = st.session_state.prompt[:30] + "..." if len(st.session_state.prompt) > 30 else st.session_state.prompt
+        download_filename = download_filename.replace(" ", "_")  # Replace spaces with underscores to avoid issues with filenames
+        download_filename = download_filename[:50]  # Limit filename length to avoid issues
 
-                ppt = add_content_to_ppt(ppt, content)
+        if st.session_state.export_format == "PPTX":
+            pptx_file = create_pptx(st.session_state.content, st.session_state.heading)
+            st.download_button(
+                label="Download PPTX",
+                data=pptx_file,
+                file_name=f"{download_filename}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )
+        elif st.session_state.export_format == "PPT":
+            ppt_file = create_ppt(st.session_state.content, st.session_state.heading)  # This will generate a PPTX but could be manually converted
+            st.download_button(
+                label="Download PPT (PPTX format, please convert manually if needed)",
+                data=ppt_file,
+                file_name=f"{download_filename}.ppt",
+                mime="application/vnd.ms-powerpoint"
+            )
+        elif st.session_state.export_format == "DOCX":
+            docx_file = create_docx(st.session_state.content, st.session_state.heading)
+            st.download_button(
+                label="Download DOCX",
+                data=docx_file,
+                file_name=f"{download_filename}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
 
-                byte_stream = BytesIO()
-                ppt.save(byte_stream)
-                byte_stream.seek(0)
 
-                end_time = time.time()
-                elapsed_time = end_time - start_time
+if __name__ == "__main__":
+    app()
 
-                st.download_button(
-                    label="Download PowerPoint Presentation",
-                    data=byte_stream,
-                    file_name=f"{topic}.pptx",
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                )
-
-            st.success(f"Document generated in {elapsed_time:.2f} seconds.")
-
-    else:
-        st.warning("Please enter a topic to generate content.")
