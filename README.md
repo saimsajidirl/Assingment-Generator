@@ -1,7 +1,11 @@
 # Software Requirements Specification (SRS) for Assignment Generator
 Version: 1.0
 Date: Nov 17 2024
-Authors: 
+Author: Muhammad Saim Sajid 
+
+Visit the Website:
+
+https://assignmentgenerator.streamlit.app/
 
 1. Introduction
 
