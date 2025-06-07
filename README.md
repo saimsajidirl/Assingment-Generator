@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS) for Assignment Generator
 Version: 1.0
 Date: Nov 17 2024
-Author: Muhammad Saim Sajid 
+Author: Muhammad Saim
 
 Visit the Website:
 
